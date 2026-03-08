@@ -15,6 +15,14 @@ aiohttp>=3.8.0
 # 数据验证
 pydantic>=1.10.0
 
+# 可视化依赖
+matplotlib>=3.5.0
+networkx>=2.6.0
+numpy>=1.21.0
+
+# 图像处理
+pillow>=8.0.0
+
 # 可选依赖（用于扩展功能）
 # transformers>=4.20.0  # 用于NLP语义分析
 # redis>=4.0.0          # 用于分布式缓存
