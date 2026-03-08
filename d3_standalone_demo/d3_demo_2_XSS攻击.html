@@ -1,0 +1,682 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D3.js XSS攻击分析</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 50px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: #667eea;
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        
+        .risk-critical { color: #9C27B0; }
+        .risk-high { color: #F44336; }
+        .risk-medium { color: #FF9800; }
+        .risk-low { color: #4CAF50; }
+        .risk-safe { color: #2196F3; }
+        
+        .graph-container {
+            height: 600px;
+            margin: 0 30px 30px 30px;
+            border-radius: 15px;
+            background: #fafafa;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .graph-container svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .node {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .node circle {
+            stroke: #fff;
+            stroke-width: 3px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+            transition: all 0.3s ease;
+        }
+        
+        .node:hover circle {
+            stroke-width: 5px;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+        }
+        
+        .node text {
+            font-size: 14px;
+            pointer-events: none;
+            text-anchor: middle;
+            fill: #333;
+            font-weight: 500;
+        }
+        
+        .link {
+            fill: none;
+            stroke-opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+        
+        .tooltip {
+            position: absolute;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            border-radius: 12px;
+            font-size: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            max-width: 350px;
+            z-index: 1000;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        .controls {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .recommendations {
+            padding: 30px;
+            background: linear-gradient(135deg, #e7f3ff, #f0f8ff);
+            border-left: 4px solid #667eea;
+        }
+        
+        .recommendations h3 {
+            margin: 0 0 20px 0;
+            color: #667eea;
+            font-size: 1.3em;
+        }
+        
+        .recommendations ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .recommendations li {
+            margin: 12px 0;
+            font-size: 1.05em;
+            line-height: 1.5;
+        }
+        
+        .legend {
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        
+        .legend h3 {
+            margin: 0 0 20px 0;
+            color: #333;
+            font-size: 1.3em;
+        }
+        
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .legend-color {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        
+        .footer {
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        
+        .footer p {
+            margin: 5px 0;
+            opacity: 0.9;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .stats-container {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+                padding: 20px;
+            }
+            
+            .graph-container {
+                height: 400px;
+                margin: 0 20px 20px 20px;
+            }
+            
+            .controls {
+                padding: 15px 20px;
+            }
+            
+            .btn {
+                padding: 10px 20px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 D3.js XSS攻击分析</h1>
+            <p>OpenClaw 威胁可视化系统 - 交互式力导向图</p>
+        </div>
+        
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-value" id="total-threats">5</div>
+                <div class="stat-label">威胁数量</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value risk-{data['statistics']['risk_level'].lower()}" id="risk-level">HIGH</div>
+                <div class="stat-label">风险等级</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="risk-score">33.5</div>
+                <div class="stat-label">风险评分</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="node-count">6</div>
+                <div class="stat-label">图节点</div>
+            </div>
+        </div>
+        
+        <div class="graph-container" id="graph"></div>
+        
+        <div class="controls">
+            <button class="btn" onclick="resetZoom()">🔄 重置缩放</button>
+            <button class="btn" onclick="toggleLabels()">🏷️ 切换标签</button>
+            <button class="btn" onclick="toggleForce()">⏸️ 暂停/继续</button>
+            <button class="btn" onclick="exportImage()">📸 导出图片</button>
+        </div>
+        
+        <div class="recommendations">
+            <h3>💡 安全建议</h3>
+            <ul>
+                <li>⚠️ 检测到高风险威胁，需要关注</li>
+            </ul>
+        </div>
+        
+        <div class="legend">
+            <h3>🎨 图例说明</h3>
+            <div class="legend-items">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #E3F2FD;"></div>
+                    <span>原始内容</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #4CAF50;"></div>
+                    <span>低风险</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #FF9800;"></div>
+                    <span>中风险</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #F44336;"></div>
+                    <span>高风险</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #9C27B0;"></div>
+                    <span>关键风险</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>🎯 交互操作指南</strong></p>
+            <p>🖱️ 拖拽节点 | 🔍 滚轮缩放 | 💡 悬停查看详情 | 🖱️ 点击节点信息</p>
+            <p><small>生成时间: 2026-03-09 00:32:28</small></p>
+        </div>
+    </div>
+    
+    <div class="tooltip" id="tooltip"></div>
+    
+    <script>
+        // 数据
+        const data = {
+  "nodes": [
+    {
+      "id": "content",
+      "name": "\u539f\u59cb\u5185\u5bb9",
+      "type": "content",
+      "content": "<script>alert('XSS\u653b\u51fb')</script><img src=x onerror=alert('XSS')>",
+      "level": "safe",
+      "color": "#E3F2FD",
+      "icon": "\ud83d\udcc4",
+      "description": "\u539f\u59cb\u8f93\u5165\u5185\u5bb9",
+      "size": 30
+    },
+    {
+      "id": "threat_0",
+      "name": "Xss",
+      "type": "xss",
+      "content": "<script>alert('XSS\u653b\u51fb')</script>",
+      "level": "medium",
+      "color": "#FF9800",
+      "icon": "\ud83c\udf10",
+      "description": "\u8de8\u7ad9\u811a\u672c\u653b\u51fb\uff1a\u53ef\u80fd\u6267\u884c\u6076\u610fJavaScript\u4ee3\u7801",
+      "confidence": 0.7,
+      "position": "0-31",
+      "size": 34.0
+    },
+    {
+      "id": "threat_1",
+      "name": "Command Injection",
+      "type": "command_injection",
+      "content": "(",
+      "level": "high",
+      "color": "#F44336",
+      "icon": "\u26a1",
+      "description": "\u547d\u4ee4\u6ce8\u5165\u653b\u51fb\uff1a\u53ef\u80fd\u6267\u884c\u7cfb\u7edf\u547d\u4ee4",
+      "confidence": 0.75,
+      "position": "13-14",
+      "size": 35.0
+    },
+    {
+      "id": "threat_2",
+      "name": "Command Injection",
+      "type": "command_injection",
+      "content": ")",
+      "level": "high",
+      "color": "#F44336",
+      "icon": "\u26a1",
+      "description": "\u547d\u4ee4\u6ce8\u5165\u653b\u51fb\uff1a\u53ef\u80fd\u6267\u884c\u7cfb\u7edf\u547d\u4ee4",
+      "confidence": 0.75,
+      "position": "21-22",
+      "size": 35.0
+    },
+    {
+      "id": "threat_3",
+      "name": "Command Injection",
+      "type": "command_injection",
+      "content": "(",
+      "level": "high",
+      "color": "#F44336",
+      "icon": "\u26a1",
+      "description": "\u547d\u4ee4\u6ce8\u5165\u653b\u51fb\uff1a\u53ef\u80fd\u6267\u884c\u7cfb\u7edf\u547d\u4ee4",
+      "confidence": 0.75,
+      "position": "55-56",
+      "size": 35.0
+    },
+    {
+      "id": "threat_4",
+      "name": "Command Injection",
+      "type": "command_injection",
+      "content": ")",
+      "level": "high",
+      "color": "#F44336",
+      "icon": "\u26a1",
+      "description": "\u547d\u4ee4\u6ce8\u5165\u653b\u51fb\uff1a\u53ef\u80fd\u6267\u884c\u7cfb\u7edf\u547d\u4ee4",
+      "confidence": 0.75,
+      "position": "61-62",
+      "size": 35.0
+    }
+  ],
+  "links": [
+    {
+      "source": "content",
+      "target": "threat_0",
+      "relationship": "contains",
+      "strength": 0.8,
+      "value": 8
+    },
+    {
+      "source": "content",
+      "target": "threat_1",
+      "relationship": "contains",
+      "strength": 0.8,
+      "value": 8
+    },
+    {
+      "source": "content",
+      "target": "threat_2",
+      "relationship": "contains",
+      "strength": 0.8,
+      "value": 8
+    },
+    {
+      "source": "content",
+      "target": "threat_3",
+      "relationship": "contains",
+      "strength": 0.8,
+      "value": 8
+    },
+    {
+      "source": "content",
+      "target": "threat_4",
+      "relationship": "contains",
+      "strength": 0.8,
+      "value": 8
+    }
+  ],
+  "statistics": {
+    "total_threats": 5,
+    "risk_score": 33.5,
+    "risk_level": "HIGH",
+    "recommendations": [
+      "\u26a0\ufe0f \u68c0\u6d4b\u5230\u9ad8\u98ce\u9669\u5a01\u80c1\uff0c\u9700\u8981\u5173\u6ce8"
+    ]
+  }
+};
+        
+        // 设置SVG尺寸
+        const container = document.getElementById('graph');
+        const width = container.clientWidth;
+        const height = 600;
+        
+        // 创建SVG
+        const svg = d3.select("#graph")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+        
+        // 创建缩放行为
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                containerGroup.attr("transform", event.transform);
+            });
+        
+        svg.call(zoom);
+        
+        // 创建容器
+        const containerGroup = svg.append("g");
+        
+        // 创建力导向图
+        const simulation = d3.forceSimulation(data.nodes)
+            .force("link", d3.forceLink(data.links)
+                .id(d => d.id)
+                .distance(120)
+                .strength(d => d.strength))
+            .force("charge", d3.forceManyBody().strength(-400))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(d => d.size + 8));
+        
+        // 创建边
+        const link = containerGroup.append("g")
+            .selectAll("line")
+            .data(data.links)
+            .enter().append("line")
+            .attr("class", "link")
+            .attr("stroke", "#999")
+            .attr("stroke-width", d => Math.sqrt(d.value) * 2)
+            .attr("stroke-opacity", d => d.strength);
+        
+        // 创建节点
+        const node = containerGroup.append("g")
+            .selectAll("g")
+            .data(data.nodes)
+            .enter().append("g")
+            .attr("class", "node")
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+        
+        // 添加圆形
+        node.append("circle")
+            .attr("r", d => d.size)
+            .attr("fill", d => d.color)
+            .on("mouseover", showTooltip)
+            .on("mouseout", hideTooltip)
+            .on("click", nodeClick);
+        
+        // 添加图标
+        node.append("text")
+            .attr("dy", ".35em")
+            .style("font-size", d => d.size * 0.6 + "px")
+            .style("pointer-events", "none")
+            .text(d => d.icon);
+        
+        // 添加标签
+        const labels = node.append("text")
+            .attr("dy", d => d.size + 20)
+            .style("font-size", "12px")
+            .style("text-anchor", "middle")
+            .style("fill", "#333")
+            .style("font-weight", "500")
+            .style("pointer-events", "none")
+            .text(d => d.name);
+        
+        // 更新位置
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+            
+            node
+                .attr("transform", d => `translate(${d.x},${d.y})`);
+        });
+        
+        // 拖拽函数
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+        
+        // 工具提示
+        const tooltip = document.getElementById("tooltip");
+        
+        function showTooltip(event, d) {
+            const confidenceText = d.confidence ? `置信度: ${(d.confidence * 100).toFixed(1)}%` : '';
+            const positionText = d.position ? `位置: ${d.position}` : '';
+            
+            tooltip.innerHTML = `
+                <strong>${d.name}</strong><br>
+                类型: ${d.type}<br>
+                等级: ${d.level}<br>
+                ${confidenceText}<br>
+                ${positionText}<br><br>
+                ${d.description}
+                ${d.content ? '<br><br><strong>内容:</strong> ' + d.content.substring(0, 60) + (d.content.length > 60 ? '...' : '') : ''}
+            `;
+            tooltip.style.left = event.pageX + 15 + "px";
+            tooltip.style.top = event.pageY - 10 + "px";
+            tooltip.style.opacity = 1;
+        }
+        
+        function hideTooltip() {
+            tooltip.style.opacity = 0;
+        }
+        
+        // 节点点击
+        function nodeClick(event, d) {
+            if (d.type === "content") {
+                alert("📄 原始内容:\n\n" + d.content);
+            } else {
+                alert(`🔍 威胁详情:\n\n类型: ${d.name}\n等级: ${d.level.toUpperCase()}\n置信度: ${(d.confidence * 100).toFixed(1)}%\n\n威胁内容: ${d.content}\n\n描述: ${d.description}`);
+            }
+        }
+        
+        // 控制函数
+        function resetZoom() {
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(0, 0).scale(1)
+            );
+        }
+        
+        let labelsVisible = true;
+        function toggleLabels() {
+            labelsVisible = !labelsVisible;
+            labels.style("display", labelsVisible ? "block" : "none");
+        }
+        
+        let forceRunning = true;
+        function toggleForce() {
+            if (forceRunning) {
+                simulation.stop();
+                document.querySelector('.btn:nth-child(3)').innerHTML = '▶️ 继续动画';
+            } else {
+                simulation.restart();
+                document.querySelector('.btn:nth-child(3)').innerHTML = '⏸️ 暂停动画';
+            }
+            forceRunning = !forceRunning;
+        }
+        
+        function exportImage() {
+            alert("📸 图片导出功能\n\n由于浏览器安全限制，您可以使用以下方法保存图表：\n\n1. Windows: Win + Shift + S (截图工具)\n2. Mac: Cmd + Shift + 4 (截图)\n3. 浏览器: F12 → 截图功能\n\n建议在图表布局稳定后截图以获得最佳效果。");
+        }
+        
+        // 响应式调整
+        window.addEventListener("resize", () => {
+            const newWidth = container.clientWidth;
+            svg.attr("width", newWidth);
+            simulation.force("center", d3.forceCenter(newWidth / 2, height / 2));
+            simulation.alpha(0.3).restart();
+        });
+        
+        // 添加初始动画效果
+        setTimeout(() => {
+            simulation.alpha(0.3).restart();
+        }, 1000);
+    </script>
+</body>
+</html>
