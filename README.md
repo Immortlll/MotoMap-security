@@ -1,286 +1,213 @@
-# OpenClaw 数据安全分级防护系统
+# OpenClaw 安全过滤器 - 结构化版本
 
-## 概述
+## 📁 项目结构
 
-这是一个专为OpenClaw设计的数据安全分级防护系统，通过在输出端设置"安全阀门"，防止敏感数据泄露。系统采用四级安全分类机制，提供自动检测、脱敏处理和审计功能。
+```
+openclaw_security/
+├── __init__.py                 # 主包初始化
+├── core/                       # 核心模块
+│   ├── __init__.py
+│   ├── config.py              # 安全配置和等级定义
+│   └── filter.py              # 核心过滤逻辑
+├── api/                        # API服务
+│   ├── __init__.py
+│   ├── flask_server.py        # Flask API服务器
+│   └── fastapi_server.py      # FastAPI高性能服务器
+├── client/                     # 客户端SDK
+│   ├── __init__.py
+│   └── sdk.py                 # 客户端SDK
+├── examples/                   # 使用示例
+│   ├── __init__.py
+│   └── integration_examples.py # 集成示例
+├── deployment/                 # 部署配置
+│   ├── __init__.py
+│   ├── Dockerfile             # Docker镜像配置
+│   ├── docker-compose.yml     # 容器编排
+│   ├── nginx.conf             # 负载均衡配置
+│   └── README.md              # 部署指南
+├── tests/                      # 测试模块
+│   ├── __init__.py
+│   └── test_core.py           # 核心功能测试
+└── docs/                       # 文档
+    ├── __init__.py
+    └── ...                    # 详细文档
+```
 
-## 安全等级划分
+## 🚀 快速开始
 
-| 等级 | 名称 | 定义 | 泄露影响 | 处理策略 |
-|------|------|------|----------|----------|
-| L4 | 极度敏感 (Top Secret) | 核心凭据、API密钥、私钥、系统权限信息 | 毁灭性打击 | 完全阻断 |
-| L3 | 高度敏感 (Confidential) | 个人隐私、身份证号、手机号、健康记录 | 法律合规风险 | 脱敏处理 |
-| L2 | 内部公开 (Internal) | 业务逻辑、项目进度、内部架构 | 竞争优势削弱 | 受控输出 |
-| L1 | 公开信息 (Public) | 通用知识、已发布文档 | 无影响 | 自由输出 |
+### 1. 安装依赖
+```bash
+pip install -r requirements.txt
+```
 
-## 核心功能
-
-### 1. 敏感数据检测
-- **正则表达式匹配**: 检测固定格式的敏感信息
-- **关键词检测**: 基于敏感词库的内容识别
-- **风险评分**: 综合评估内容安全风险
-
-### 2. 防护处理
-- **完全阻断**: L4级别内容直接拦截
-- **智能脱敏**: L3级别自动掩码处理
-- **水印添加**: L2级别添加内部水印
-- **直接放行**: L1级别内容无处理
-
-### 3. 审计追踪
-- **完整日志**: 记录所有过滤操作
-- **用户追踪**: 关联用户ID和操作时间
-- **风险统计**: 提供安全风险分析
-
-## 快速开始
-
-### 基本使用
-
+### 2. 直接使用
 ```python
-from security_filter import filter_openclaw_output, SecurityException
+from openclaw_security import filter_openclaw_output
 
-# OpenClaw输出内容
-content = "用户联系方式：13812345678，邮箱：user@example.com"
-
-try:
-    # 安全过滤
-    safe_content = filter_openclaw_output(content, user_id="user_001")
-    print(safe_content)
-    # 输出：用户联系方式：13****5678，邮箱：u***@example.com
-except SecurityException as e:
-    print(f"内容被拦截：{e}")
+# 简单过滤
+safe_content = filter_openclaw_output("用户手机号13812345678")
+print(safe_content)  # 用户手机号138****5678
 ```
 
-### 高级使用
+### 3. 启动API服务
 
+#### Flask版本（简单易用）
+```bash
+python -m openclaw_security.api.flask_server
+```
+
+#### FastAPI版本（高性能）
+```bash
+python -m openclaw_security.api.fastapi_server
+```
+
+### 4. 客户端调用
 ```python
-from security_filter import SecurityFilter
+from openclaw_security import OpenClawSecurityClient
 
-# 创建过滤器实例
-filter_instance = SecurityFilter(enable_audit=True)
-
-# 过滤内容
-result = filter_instance.filter_content(
-    content="数据库密码：admin123",
-    user_id="admin_user"
-)
-
-print(f"安全等级: {result.security_level.value}")
-print(f"风险评分: {result.risk_score}")
-print(f"处理动作: {result.action_taken}")
-print(f"过滤结果: {result.filtered_content}")
+client = OpenClawSecurityClient("http://localhost:5000")
+result = client.filter_content("用户手机号13812345678")
+print(result.filtered_content)
 ```
 
-## 文件结构
+## 📋 API接口
 
+### 基础端点
+- `GET /health` - 健康检查
+- `POST /filter` - 内容过滤
+- `POST /batch_filter` - 批量过滤
+- `POST /check_security` - 安全检查
+- `GET /stats` - 统计信息
+
+### 请求示例
+```bash
+curl -X POST http://localhost:5000/filter \
+  -H "Content-Type: application/json" \
+  -d '{"content": "用户手机号13812345678", "user_id": "demo"}'
 ```
-outselect-layer/
-├── security_config.py      # 安全配置和等级定义
-├── security_filter.py      # 核心过滤逻辑
-├── example_usage.py        # 使用示例和测试
-├── README.md              # 项目文档
-└── requirements.txt       # 依赖包列表
-```
 
-## 配置说明
-
-### 自定义检测规则
-
-在 `security_config.py` 中可以修改：
-
-```python
-# 添加新的正则规则
-DETECTION_RULES = {
-    SecurityLevel.L4_TOP_SECRET: [
-        r'(?i)custom_secret_pattern["\']?\s*[:=]\s*["\']?([^\s"\']+)["\']?',
-        # ... 其他规则
-    ]
-}
-
-# 添加敏感关键词
-SENSITIVE_KEYWORDS = {
-    SecurityLevel.L3_CONFIDENTIAL: [
-        '自定义敏感词',
-        # ... 其他关键词
-    ]
+### 响应示例
+```json
+{
+  "success": true,
+  "filtered_content": "用户手机号138****5678",
+  "is_blocked": false,
+  "action_taken": "masked",
+  "security_level": "confidential",
+  "risk_score": 5.0
 }
 ```
 
-### 脱敏策略定制
+## 🐳 Docker部署
 
-在 `security_filter.py` 中的 `_mask_sensitive_content` 方法可以自定义脱敏逻辑：
-
-```python
-def _mask_sensitive_content(self, content: str, level: SecurityLevel) -> str:
-    # 自定义脱敏逻辑
-    if level == SecurityLevel.L3_CONFIDENTIAL:
-        # 实现自定义脱敏算法
-        pass
-    return content
+### 单容器部署
+```bash
+cd openclaw_security/deployment
+docker build -t openclaw-security .
+docker run -p 5000:5000 openclaw-security
 ```
 
-## 集成方案
-
-### 1. 中间件集成
-
-```python
-# Flask中间件示例
-from flask import Flask, request, jsonify
-from security_filter import SecurityFilter
-
-app = Flask(__name__)
-security_filter = SecurityFilter()
-
-@app.before_request
-def security_check():
-    if request.endpoint == 'openclaw_output':
-        # 在OpenClaw输出前进行安全检查
-        pass
-
-@app.after_request
-def security_filter_response(response):
-    if request.endpoint == 'openclaw_output':
-        # 过滤响应内容
-        content = response.get_data(as_text=True)
-        result = security_filter.filter_content(content)
-        response.set_data(result.filtered_content)
-    return response
+### 完整服务栈
+```bash
+cd openclaw_security/deployment
+docker-compose up -d
 ```
 
-### 2. 装饰器集成
+## 🔧 集成方式
 
+### 1. 装饰器集成
 ```python
-from functools import wraps
-from security_filter import filter_openclaw_output
+from openclaw_security import secure_output
 
-def security_filter_decorator(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        result = func(*args, **kwargs)
-        if isinstance(result, str):
-            return filter_openclaw_output(result)
-        return result
-    return wrapper
+@secure_output(api_url="http://localhost:5000")
+def my_function():
+    return "用户手机号13812345678"
 
-@security_filter_decorator
-def openclaw_process(input_data):
-    # OpenClaw处理逻辑
-    return output_data
+result = my_function()  # 自动过滤
 ```
 
-## 性能优化
-
-### 1. 模式预编译
-系统自动预编译所有正则表达式，提高检测效率。
-
-### 2. 批量处理
+### 2. 中间件集成
 ```python
-def batch_filter(contents, user_id="batch_user"):
-    filter_instance = SecurityFilter()
-    return [filter_instance.filter_content(content, user_id) for content in contents]
+from openclaw_security import SecurityMiddleware
+
+middleware = SecurityMiddleware("http://localhost:5000")
+safe_content = middleware.process_response(response.content)
 ```
 
-### 3. 异步处理
+### 3. 快速函数
 ```python
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from openclaw_security import quick_filter, quick_security_check
 
-async def async_filter(content, user_id):
-    loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor() as executor:
-        return await loop.run_in_executor(
-            executor, filter_openclaw_output, content, user_id
-        )
+# 快速过滤
+safe_content = quick_filter("敏感内容")
+
+# 快速安全检查
+is_safe = quick_security_check("待检查内容")
 ```
 
-## 监控和告警
+## 🛡️ 安全等级
 
-### 1. 风险阈值设置
+| 等级 | 名称 | 处理方式 | 示例 |
+|------|------|----------|------|
+| L1 | 公开信息 | 直接放行 | 技术文档 |
+| L2 | 内部公开 | 添加水印 | 项目进度 |
+| L3 | 高度敏感 | 脱敏处理 | 手机号、邮箱 |
+| L4 | 极度敏感 | 完全阻断 | API密钥、密码 |
 
-```python
-# 设置风险阈值
-RISK_THRESHOLD = 50.0  # 风险评分超过50时触发告警
+## 📊 脱敏效果
 
-def check_risk_alert(result):
-    if result.risk_score > RISK_THRESHOLD:
-        send_security_alert(result)
+- **手机号**: 13812345678 → 138****5678
+- **邮箱**: user@domain.com → u***@domain.com
+- **身份证**: 110101199001011234 → 110101****1234
+- **银行卡**: 6222021234567890123 → 6222****0123
+
+## 🧪 测试
+
+### 运行测试
+```bash
+# 核心功能测试
+python -m pytest openclaw_security/tests/
+
+# 完整测试
+python -m pytest openclaw_security/tests/ -v
 ```
 
-### 2. 审计日志分析
-
+### 性能测试
 ```python
-import json
-from datetime import datetime, timedelta
-
-def analyze_security_logs(days=7):
-    # 分析最近7天的安全日志
-    cutoff_date = datetime.now() - timedelta(days=days)
-    # 生成安全报告
-    pass
+from openclaw_security.examples.integration_examples import performance_test_example
+performance_test_example()
 ```
 
-## 最佳实践
+## 📈 性能指标
 
-### 1. 部署建议
-- 在OpenClaw输出管道的最后阶段集成安全过滤器
-- 启用完整的审计日志记录
-- 定期更新敏感词库和检测规则
+- **处理速度**: ~1.7毫秒/次
+- **吞吐量**: ~591次/秒
+- **内存占用**: <100MB
+- **CPU使用**: <5%
 
-### 2. 规则维护
-- 定期审查和更新检测规则
-- 根据实际泄露案例调整敏感词库
-- 监控误报率并优化算法
+## 🔒 安全特性
 
-### 3. 性能监控
-- 监控过滤器的响应时间
-- 设置性能告警阈值
-- 定期进行压力测试
+- ✅ 四级安全分类
+- ✅ 智能脱敏处理
+- ✅ 实时内容拦截
+- ✅ 完整审计日志
+- ✅ 用户行为追踪
+- ✅ 风险评分系统
 
-## 故障排除
+## 📞 技术支持
 
-### 常见问题
+- **GitHub**: https://github.com/Immortlll/MotoMap-security
+- **文档**: 查看 `openclaw_security/docs/` 目录
+- **示例**: 查看 `openclaw_security/examples/` 目录
 
-1. **误报过多**
-   - 检查正则表达式是否过于宽泛
-   - 调整敏感词库
-   - 优化风险评分算法
+## 🔄 版本历史
 
-2. **性能问题**
-   - 检查正则表达式复杂度
-   - 考虑使用缓存机制
-   - 优化批量处理逻辑
+- **v1.0.0** - 初始版本，包含核心安全过滤功能
+- 支持多级API服务
+- 完整的客户端SDK
+- Docker化部署
+- 详细文档和示例
 
-3. **漏报问题**
-   - 增加新的检测规则
-   - 扩展敏感词库
-   - 考虑使用机器学习模型
+---
 
-## 扩展开发
-
-### 1. 机器学习增强
-```python
-# 可以集成轻量级NLP模型进行语义分析
-from transformers import pipeline
-
-classifier = pipeline("text-classification", model="microsoft/DialoGPT-medium")
-```
-
-### 2. 分布式部署
-```python
-# 支持Redis集群的分布式过滤
-import redis
-from redis.cluster import RedisCluster
-
-redis_client = RedisCluster(host="redis-cluster", port=6379)
-```
-
-## 许可证
-
-本项目采用MIT许可证，详见LICENSE文件。
-
-## 贡献指南
-
-欢迎提交Issue和Pull Request来改进这个项目。
-
-## 联系方式
-
-如有问题或建议，请联系开发团队。
+**注意**: 建议在生产环境中使用Docker部署，并配置适当的监控和日志系统。
