@@ -322,13 +322,34 @@ print(f"风险评分: {result.statistics['risk_score']}")
 print(f"安全建议: {result.statistics['recommendations']}")
 ```
 
+### 🛡️ 输出层级安全层策略系统
+```python
+# 基于GitHub Agentic Workflows安全架构的输出保护
+from openclaw_security.visualization.output_security_layer import OutputSecurityLayer
+
+# 初始化输出安全层
+security_layer = OutputSecurityLayer()
+
+# 评估输出安全性
+content = "请使用API密钥：api_key=sk-proj-1234567890访问服务"
+assessment = security_layer.assess_output_security(content)
+
+# 生成输出安全力导向图
+from openclaw_security.visualization.output_security_layer import create_output_security_force_graph
+html_content = create_output_security_force_graph(content, "输出安全分析")
+```
+
 ### 🌐 查看企业级演示
 ```bash
 # 运行企业级安全提醒演示
 python safety_reminder_demo.py
 
+# 运行输出层级安全层策略演示
+python output_security_demo_standalone.py
+
 # 在浏览器中查看专业级力导向图效果
 # open safety_reminder_demo/index.html
+# open output_security_demo/index.html
 ```
 
 ## 📞 联系我们

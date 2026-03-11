@@ -1,0 +1,681 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>输出安全分析 - 正常安全内容</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 50px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.2em;
+            font-weight: 300;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .security-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        
+        .overview-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .overview-card:hover {
+            transform: translateY(-5px);
+            border-color: #667eea;
+        }
+        
+        .overview-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .overview-label {
+            color: #666;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        
+        .security-secure { color: #4CAF50; }
+        .security-caution { color: #FF9800; }
+        .security-warning { color: #FF5722; }
+        .security-blocked { color: #F44336; }
+        
+        .graph-container {
+            height: 600px;
+            margin: 0 30px 30px 30px;
+            border-radius: 15px;
+            background: #fafafa;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .graph-container svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .node {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .node circle {
+            stroke: #fff;
+            stroke-width: 3px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+            transition: all 0.3s ease;
+        }
+        
+        .node:hover circle {
+            stroke-width: 5px;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+        }
+        
+        .node text {
+            font-size: 12px;
+            pointer-events: none;
+            text-anchor: middle;
+            fill: #333;
+            font-weight: 500;
+        }
+        
+        .link {
+            fill: none;
+            stroke-opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+        
+        .tooltip {
+            position: absolute;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            border-radius: 12px;
+            font-size: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            max-width: 400px;
+            z-index: 1000;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        .controls {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .recommendations {
+            padding: 30px;
+            background: linear-gradient(135deg, #e7f3ff, #f0f8ff);
+            border-left: 4px solid #667eea;
+        }
+        
+        .recommendations h3 {
+            margin: 0 0 20px 0;
+            color: #667eea;
+            font-size: 1.3em;
+        }
+        
+        .recommendations ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .recommendations li {
+            margin: 12px 0;
+            font-size: 1.05em;
+            line-height: 1.5;
+        }
+        
+        .footer {
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        
+        .footer p {
+            margin: 5px 0;
+            opacity: 0.9;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .security-overview {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+                padding: 20px;
+            }
+            
+            .graph-container {
+                height: 400px;
+                margin: 0 20px 20px 20px;
+            }
+            
+            .controls {
+                padding: 15px 20px;
+            }
+            
+            .btn {
+                padding: 10px 20px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ 输出安全分析 - 正常安全内容</h1>
+            <p>输出层级安全层策略系统 - 基于GitHub安全架构的专业级保护</p>
+        </div>
+        
+        <div class="security-overview">
+            <div class="overview-card">
+                <div class="overview-value security-secure">SECURE</div>
+                <div class="overview-label">安全等级</div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-value">0</div>
+                <div class="overview-label">检测到秘密</div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-value">0</div>
+                <div class="overview-label">威胁数量</div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-value">1</div>
+                <div class="overview-label">净化步骤</div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-value">1</div>
+                <div class="overview-label">安全建议</div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-value">⚠️</div>
+                <div class="overview-label">权限隔离</div>
+            </div>
+        </div>
+        
+        <div class="graph-container" id="graph"></div>
+        
+        <div class="controls">
+            <button class="btn" onclick="resetZoom()">🔄 重置视图</button>
+            <button class="btn" onclick="toggleLabels()">🏷️ 切换标签</button>
+            <button class="btn" onclick="toggleForce()">⏸️ 暂停动画</button>
+            <button class="btn" onclick="showDetails()">📋 查看详情</button>
+            <button class="btn" onclick="exportData()">📤 导出数据</button>
+        </div>
+        
+        <div class="recommendations">
+            <h3>💡 安全建议</h3>
+            <ul>
+                <li>✅ 内容安全，可以正常输出</li>
+            </ul>
+        </div>
+        
+        <div class="footer">
+            <p><strong>🛡️ 输出层级安全层策略系统</strong></p>
+            <p>基于GitHub Agentic Workflows安全架构，提供企业级输出保护</p>
+            <p><small>生成时间: 2026-03-10 21:39:58</small></p>
+        </div>
+    </div>
+    
+    <div class="tooltip" id="tooltip"></div>
+    
+    <script>
+        // 数据
+        const data = {
+  "nodes": [
+    {
+      "id": "original_content",
+      "name": "\u539f\u59cb\u5185\u5bb9",
+      "type": "content",
+      "content": "\u4eca\u5929\u5929\u6c14\u5f88\u597d\uff0c\u9002\u5408\u51fa\u95e8\u6563\u6b65\u3002\u5efa\u8bae\u505a\u597d\u9632\u6652\u63aa\u65bd\uff0c\u591a\u559d\u6c34\u4fdd\u6301\u5065\u5eb7\u3002",
+      "level": "original",
+      "color": "#2196F3",
+      "icon": "\ud83d\udcc4",
+      "description": "\u5f85\u8f93\u51fa\u7684\u539f\u59cb\u5185\u5bb9",
+      "size": 40,
+      "content_length": 31
+    },
+    {
+      "id": "sanitized_content",
+      "name": "\u51c0\u5316\u5185\u5bb9",
+      "type": "sanitized",
+      "content": "\u4eca\u5929\u5929\u6c14\u5f88\u597d\u9002\u5408\u51fa\u95e8\u6563\u6b65\u5efa\u8bae\u505a\u597d\u9632\u6652\u63aa\u65bd\u591a\u559d\u6c34\u4fdd\u6301\u5065\u5eb7",
+      "level": "sanitized",
+      "color": "#00BCD4",
+      "icon": "\ud83e\uddf9",
+      "description": "\u7ecf\u8fc7\u5b89\u5168\u51c0\u5316\u7684\u5185\u5bb9",
+      "size": 35,
+      "sanitization_count": 1
+    },
+    {
+      "id": "security_level",
+      "name": "\u5b89\u5168\u7b49\u7ea7: SECURE",
+      "type": "security",
+      "level": "secure",
+      "color": "#4CAF50",
+      "icon": "\ud83d\udee1\ufe0f",
+      "description": "\u6574\u4f53\u5b89\u5168\u7b49\u7ea7\u8bc4\u4f30",
+      "size": 30,
+      "recommendations_count": 1
+    },
+    {
+      "id": "permission_isolation",
+      "name": "\u6743\u9650\u9694\u79bb",
+      "type": "permission",
+      "level": "isolation",
+      "color": "#7E57C2",
+      "icon": "\ud83d\udd10",
+      "description": "\u6743\u9650\u9694\u79bb\u72b6\u6001: optional",
+      "size": 25,
+      "isolation_required": false
+    },
+    {
+      "id": "sanitizer_0",
+      "name": "special_character_handling",
+      "type": "sanitizer",
+      "level": "sanitization",
+      "color": "#009688",
+      "icon": "\u2699\ufe0f",
+      "description": "\u7279\u6b8a\u5b57\u7b26\u5904\u7406",
+      "size": 23,
+      "matches_count": 4
+    }
+  ],
+  "links": [
+    {
+      "source": "original_content",
+      "target": "sanitizer_0",
+      "relationship": "sanitized_by",
+      "strength": 0.8,
+      "value": 5
+    },
+    {
+      "source": "original_content",
+      "target": "sanitized_content",
+      "relationship": "sanitized_to",
+      "strength": 0.9,
+      "value": 10
+    },
+    {
+      "source": "sanitized_content",
+      "target": "security_level",
+      "relationship": "assessed_by",
+      "strength": 0.8,
+      "value": 8
+    },
+    {
+      "source": "security_level",
+      "target": "permission_isolation",
+      "relationship": "requires",
+      "strength": 0.7,
+      "value": 6
+    }
+  ]
+};
+        
+        // 设置SVG尺寸
+        const container = document.getElementById('graph');
+        const width = container.clientWidth;
+        const height = 600;
+        
+        // 创建SVG
+        const svg = d3.select("#graph")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+        
+        // 创建缩放行为
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                containerGroup.attr("transform", event.transform);
+            });
+        
+        svg.call(zoom);
+        
+        // 创建容器
+        const containerGroup = svg.append("g");
+        
+        // 创建力导向图
+        const simulation = d3.forceSimulation(data.nodes)
+            .force("link", d3.forceLink(data.links)
+                .id(d => d.id)
+                .distance(120)
+                .strength(d => d.strength))
+            .force("charge", d3.forceManyBody().strength(-400))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(d => d.size + 5));
+        
+        // 创建边
+        const link = containerGroup.append("g")
+            .selectAll("line")
+            .data(data.links)
+            .enter().append("line")
+            .attr("class", "link")
+            .attr("stroke", "#999")
+            .attr("stroke-width", d => Math.sqrt(d.value))
+            .attr("stroke-opacity", d => d.strength);
+        
+        // 创建节点
+        const node = containerGroup.append("g")
+            .selectAll("g")
+            .data(data.nodes)
+            .enter().append("g")
+            .attr("class", "node")
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+        
+        // 添加圆形
+        node.append("circle")
+            .attr("r", d => d.size)
+            .attr("fill", d => d.color)
+            .on("mouseover", showTooltip)
+            .on("mouseout", hideTooltip)
+            .on("click", nodeClick);
+        
+        // 添加图标
+        node.append("text")
+            .attr("dy", ".35em")
+            .style("font-size", d => d.size * 0.4 + "px")
+            .style("pointer-events", "none")
+            .text(d => d.icon);
+        
+        // 添加标签
+        const labels = node.append("text")
+            .attr("dy", d => d.size + 18)
+            .style("font-size", "12px")
+            .style("text-anchor", "middle")
+            .style("fill", "#333")
+            .style("font-weight", "500")
+            .style("pointer-events", "none")
+            .text(d => d.name);
+        
+        // 更新位置
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+            
+            node
+                .attr("transform", d => `translate(${d.x},${d.y})`);
+        });
+        
+        // 拖拽函数
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+        
+        // 工具提示
+        const tooltip = document.getElementById("tooltip");
+        
+        function showTooltip(event, d) {
+            let content = `<strong>${d.name}</strong><br>`;
+            content += `类型: ${d.type}<br>`;
+            content += `等级: ${d.level}<br>`;
+            
+            if (d.content_length) {
+                content += `内容长度: ${d.content_length}<br>`;
+            }
+            
+            if (d.confidence) {
+                content += `置信度: ${(d.confidence * 100).toFixed(1)}%<br>`;
+            }
+            
+            if (d.matches_count) {
+                content += `匹配次数: ${d.matches_count}<br>`;
+            }
+            
+            if (d.masked_value) {
+                content += `<br><strong>脱敏值:</strong> ${d.masked_value}`;
+            }
+            
+            if (d.description) {
+                content += `<br><br><strong>描述:</strong> ${d.description}`;
+            }
+            
+            if (d.content && d.content !== d.name) {
+                content += `<br><br><strong>内容:</strong> ${d.content.substring(0, 100)}${d.content.length > 100 ? '...' : ''}`;
+            }
+            
+            tooltip.innerHTML = content;
+            tooltip.style.left = event.pageX + 15 + "px";
+            tooltip.style.top = event.pageY - 10 + "px";
+            tooltip.style.opacity = 1;
+        }
+        
+        function hideTooltip() {
+            tooltip.style.opacity = 0;
+        }
+        
+        // 节点点击
+        function nodeClick(event, d) {
+            let details = `📋 节点详情\n\n`;
+            details += `名称: ${d.name}\n`;
+            details += `类型: ${d.type}\n`;
+            details += `等级: ${d.level}\n`;
+            
+            if (d.confidence) {
+                details += `置信度: ${(d.confidence * 100).toFixed(1)}%\n`;
+            }
+            
+            if (d.description) {
+                details += `\n描述: ${d.description}`;
+            }
+            
+            if (d.content) {
+                details += `\n内容: ${d.content}`;
+            }
+            
+            alert(details);
+        }
+        
+        // 控制函数
+        function resetZoom() {
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(0, 0).scale(1)
+            );
+        }
+        
+        let labelsVisible = true;
+        function toggleLabels() {
+            labelsVisible = !labelsVisible;
+            labels.style("display", labelsVisible ? "block" : "none");
+        }
+        
+        let forceRunning = true;
+        function toggleForce() {
+            if (forceRunning) {
+                simulation.stop();
+                document.querySelector('.btn:nth-child(3)').innerHTML = '▶️ 继续动画';
+            } else {
+                simulation.restart();
+                document.querySelector('.btn:nth-child(3)').innerHTML = '⏸️ 暂停动画';
+            }
+            forceRunning = !forceRunning;
+        }
+        
+        function showDetails() {
+            let details = `📋 安全分析详情\n\n`;
+            details += `🔍 原始内容长度: ${data.nodes.find(n => n.id === 'original_content').content_length}\n`;
+            details += `🧹 净化步骤数: ${data.nodes.find(n => n.id === 'sanitized_content').sanitization_count}\n`;
+            details += `🛡️ 安全等级: ${data.nodes.find(n => n.id === 'security_level').name}\n`;
+            details += `🔑 检测秘密数: ${data.nodes.find(n => n.id === 'secret_detection')?.secrets?.length || 0}\n`;
+            details += `⚠️ 威胁数量: ${data.nodes.find(n => n.id === 'threat_analysis')?.threats?.length || 0}\n`;
+            details += `🔐 权限隔离: ${data.nodes.find(n => n.id === 'permission_isolation').isolation_required ? '需要' : '不需要'}\n`;
+            
+            alert(details);
+        }
+        
+        function exportData() {
+            const exportData = {
+                timestamp: new Date().toISOString(),
+                security_assessment: {
+  "original_content": "\u4eca\u5929\u5929\u6c14\u5f88\u597d\uff0c\u9002\u5408\u51fa\u95e8\u6563\u6b65\u3002\u5efa\u8bae\u505a\u597d\u9632\u6652\u63aa\u65bd\uff0c\u591a\u559d\u6c34\u4fdd\u6301\u5065\u5eb7\u3002",
+  "sanitized_content": "\u4eca\u5929\u5929\u6c14\u5f88\u597d\u9002\u5408\u51fa\u95e8\u6563\u6b65\u5efa\u8bae\u505a\u597d\u9632\u6652\u63aa\u65bd\u591a\u559d\u6c34\u4fdd\u6301\u5065\u5eb7",
+  "security_level": "secure",
+  "detected_secrets": [],
+  "sanitization_log": [
+    {
+      "type": "sanitization",
+      "name": "special_character_handling",
+      "description": "\u7279\u6b8a\u5b57\u7b26\u5904\u7406",
+      "matches_count": 4,
+      "matches": [
+        "\uff0c",
+        "\u3002",
+        "\uff0c"
+      ]
+    }
+  ],
+  "permission_check": {
+    "requires_isolation": false,
+    "restricted_count": 0,
+    "confidential_count": 0,
+    "safe_outputs_available": [
+      "create_issue",
+      "add_comment",
+      "create_pull_request",
+      "add_labels"
+    ],
+    "isolation_status": "optional"
+  },
+  "threat_analysis": {
+    "threats_detected": 0,
+    "threats": [],
+    "overall_risk": "low"
+  },
+  "recommendations": [
+    "\u2705 \u5185\u5bb9\u5b89\u5168\uff0c\u53ef\u4ee5\u6b63\u5e38\u8f93\u51fa"
+  ],
+  "timestamp": "2026-03-10T21:39:58.491928"
+},
+                graph_data: data
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'security_analysis_output.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // 响应式调整
+        window.addEventListener("resize", () => {
+            const newWidth = container.clientWidth;
+            svg.attr("width", newWidth);
+            simulation.force("center", d3.forceCenter(newWidth / 2, height / 2));
+            simulation.alpha(0.3).restart();
+        });
+        
+        // 添加初始动画效果
+        setTimeout(() => {
+            simulation.alpha(0.3).restart();
+        }, 1000);
+    </script>
+</body>
+</html>
